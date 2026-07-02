@@ -91,6 +91,7 @@ class Trainer:
 
         training_start = time.time()
 
+        # TODO: Aqui medir el paso del tiempo usando los callbacks en TrainingLogger.
         for epoch in range(1, epochs + 1):
             epoch_start = time.time()
 

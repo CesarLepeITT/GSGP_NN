@@ -35,7 +35,7 @@ def load_config(config_path: str = "config/config.yaml") -> dict[str, Any]:
         config = yaml.safe_load(f)
     return config
 
-
+# TODO: Paralelizar esto
 def prepare_semantic_data(
     X: np.ndarray,
     num_nodes: int,
