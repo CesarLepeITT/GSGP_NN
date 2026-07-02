@@ -131,3 +131,93 @@ class TestGSGPNN:
             out1 = model(**dummy_data)
             out2 = model(**dummy_data)
         assert torch.allclose(out1, out2)
+
+
+# ── Edge-case tests ─────────────────────────────────────────────────────
+
+
+class TestGSGPNNEdgeCases:
+    @pytest.fixture
+    def device(self):
+        return torch.device("cpu")
+
+    def test_single_node_layer(self, device):
+        """N=1, K=1 should work (smallest possible model)."""
+        torch.manual_seed(0)
+        model = GSGPNN(num_nodes=1, num_layers=1).to(device)
+        N, M = 1, 5
+        data = {
+            "initial_semantics": torch.randn(N, M, device=device),
+            "parent_semantics": torch.randn(N, M, device=device),
+            "route_semantics": [
+                {"rt1": torch.randn(N, M, device=device),
+                 "rt2": torch.randn(N, M, device=device)}
+            ],
+        }
+        output = model(**data)
+        assert output.shape == (M,)
+        assert torch.isfinite(output).all()
+
+    def test_single_pattern(self, device):
+        """M=1 should work (single data point)."""
+        torch.manual_seed(0)
+        model = GSGPNN(num_nodes=5, num_layers=2).to(device)
+        N, M = 5, 1
+        data = {
+            "initial_semantics": torch.randn(N, M, device=device),
+            "parent_semantics": torch.randn(N, M, device=device),
+            "route_semantics": [
+                {"rt1": torch.randn(N, M, device=device),
+                 "rt2": torch.randn(N, M, device=device)}
+                for _ in range(2)
+            ],
+        }
+        output = model(**data)
+        assert output.shape == (M,)
+        assert torch.isfinite(output).all()
+
+    def test_state_dict_roundtrip(self, device):
+        """save and load state_dict should preserve output."""
+        torch.manual_seed(0)
+        model = GSGPNN(num_nodes=3, num_layers=1).to(device)
+        N, M = 3, 10
+        data = {
+            "initial_semantics": torch.randn(N, M, device=device),
+            "parent_semantics": torch.randn(N, M, device=device),
+            "route_semantics": [
+                {"rt1": torch.randn(N, M, device=device),
+                 "rt2": torch.randn(N, M, device=device)}
+            ],
+        }
+        model.eval()
+        with torch.no_grad():
+            out_before = model(**data)
+
+        state = model.state_dict()
+        model2 = GSGPNN(num_nodes=3, num_layers=1).to(device)
+        model2.load_state_dict(state)
+        model2.eval()
+        with torch.no_grad():
+            out_after = model2(**data)
+
+        assert torch.allclose(out_before, out_after)
+
+    def test_gradient_flow_single_layer(self, device):
+        """K=1: gradients should flow to all parameters."""
+        torch.manual_seed(0)
+        model = GSGPNN(num_nodes=4, num_layers=1).to(device)
+        N, M = 4, 10
+        data = {
+            "initial_semantics": torch.randn(N, M, device=device),
+            "parent_semantics": torch.randn(N, M, device=device),
+            "route_semantics": [
+                {"rt1": torch.randn(N, M, device=device),
+                 "rt2": torch.randn(N, M, device=device)}
+            ],
+        }
+        output = model(**data)
+        loss = output.mean()
+        loss.backward()
+        for name, param in model.named_parameters():
+            assert param.grad is not None, f"No gradient for {name}"
+            assert torch.isfinite(param.grad).all(), f"Non-finite grad for {name}"

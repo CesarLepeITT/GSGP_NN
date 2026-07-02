@@ -1,11 +1,13 @@
 """Integration tests for the training pipeline."""
 
+from pathlib import Path
+
 import pytest
 import torch
 
 from src.models.gsgp_nn import GSGPNN
 from src.training.early_stopping import EarlyStopping
-from src.training.callbacks import TrainingLogger
+from src.training.callbacks import TrainingLogger, ModelCheckpoint
 from src.training.trainer import Trainer
 
 
@@ -119,3 +121,66 @@ class TestEarlyStopping:
         assert es.epoch == 0
         assert es.wait == 0
         assert es.best_loss == float("inf")
+
+
+# ── TrainingLogger tests ────────────────────────────────────────────────
+
+
+class TestTrainingLogger:
+    def test_init_defaults(self):
+        logger = TrainingLogger()
+        assert logger.print_every == 1
+        assert logger.window_size == 25
+
+    def test_on_epoch_end_accumulates_history(self):
+        logger = TrainingLogger()
+        logger.on_epoch_start()
+        logger.on_epoch_end(1, 0.5)
+        logger.on_epoch_start()
+        logger.on_epoch_end(2, 0.3)
+        assert len(logger._history) == 2
+        assert logger._history == [0.5, 0.3]
+
+    def test_on_epoch_end_no_improvement_window(self):
+        """No improvement string when fewer epochs than window_size."""
+        logger = TrainingLogger(print_every=1, window_size=10)
+        logger.on_epoch_start()
+        logger.on_epoch_end(1, 0.5)
+        assert len(logger._history) == 1
+
+    def test_logger_custom_every(self):
+        logger = TrainingLogger(print_every=5)
+        assert logger.print_every == 5
+
+
+# ── ModelCheckpoint tests ───────────────────────────────────────────────
+
+
+class TestModelCheckpoint:
+    @pytest.fixture
+    def model(self):
+        return GSGPNN(num_nodes=3, num_layers=1)
+
+    def test_creates_directory(self, tmp_path, model):
+        save_dir = str(tmp_path / "checkpoints")
+        cp = ModelCheckpoint(save_dir=save_dir)
+        assert Path(save_dir).exists()
+
+    def test_saves_on_improvement(self, tmp_path, model):
+        cp = ModelCheckpoint(save_dir=str(tmp_path))
+        saved = cp.on_epoch_end(1.0, model)
+        assert saved is True
+        assert cp.save_path.exists()
+
+    def test_does_not_save_worse(self, tmp_path, model):
+        cp = ModelCheckpoint(save_dir=str(tmp_path))
+        cp.on_epoch_end(1.0, model)  # best = 1.0
+        saved = cp.on_epoch_end(2.0, model)  # worse
+        assert saved is False
+
+    def test_saves_again_on_improvement(self, tmp_path, model):
+        cp = ModelCheckpoint(save_dir=str(tmp_path))
+        cp.on_epoch_end(2.0, model)  # best = 2.0
+        saved = cp.on_epoch_end(1.0, model)  # better
+        assert saved is True
+        assert cp.best_loss == 1.0

@@ -2,9 +2,11 @@
 
 import pytest
 import numpy as np
+import torch
 
 from src.evolution.nodes import GPNode
 from src.evolution.generator import GPGenerator
+from src.evolution.semantics import SemanticEvaluator
 
 
 # ── GPNode tests ────────────────────────────────────────────────────────
@@ -126,3 +128,63 @@ class TestGPGenerator:
         vals1 = [t.evaluate({"x1": 1.0, "x2": 2.0, "x3": 3.0}) for t in pop1]
         vals2 = [t.evaluate({"x1": 1.0, "x2": 2.0, "x3": 3.0}) for t in pop2]
         assert vals1 != vals2
+
+
+# ── SemanticEvaluator tests ─────────────────────────────────────────────
+
+
+class TestSemanticEvaluator:
+    @pytest.fixture
+    def device(self):
+        return torch.device("cpu")
+
+    @pytest.fixture
+    def evaluator(self, device):
+        return SemanticEvaluator(
+            variable_names=["x1", "x2"],
+            device=device,
+        )
+
+    @pytest.fixture
+    def simple_tree(self):
+        root = GPNode("+", is_terminal=False, arity=2)
+        root.add_child(GPNode("x1", is_terminal=True))
+        root.add_child(GPNode(2.0, is_terminal=True))
+        return root
+
+    def test_evaluate_individual_shape(self, evaluator, simple_tree):
+        X = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        result = evaluator.evaluate_individual(simple_tree, X)
+        assert result.shape == (3,)
+
+    def test_evaluate_individual_device(self, evaluator, simple_tree):
+        X = np.array([[1.0, 2.0]])
+        result = evaluator.evaluate_individual(simple_tree, X)
+        assert result.device.type == "cpu"
+
+    def test_evaluate_individual_values(self, evaluator, simple_tree):
+        X = np.array([[3.0, 0.0], [5.0, 0.0]])
+        result = evaluator.evaluate_individual(simple_tree, X)
+        # tree: x1 + 2.0 → values: 5.0, 7.0
+        # After normalisation: mean=6, std=1 → [-1.0, 1.0]
+        expected = torch.tensor([-1.0, 1.0], dtype=torch.float32)
+        assert torch.allclose(result, expected, atol=1e-5)
+
+    def test_create_semantic_matrix_shape(self, evaluator, simple_tree):
+        X = np.array([[1.0, 2.0], [3.0, 4.0]])
+        matrix = evaluator.create_semantic_matrix([simple_tree, simple_tree], X)
+        assert matrix.shape == (2, 2)
+
+    def test_normalize_semantics_zero_std(self):
+        constant = np.array([5.0, 5.0, 5.0])
+        result = SemanticEvaluator._normalize_semantics(constant)
+        assert result.shape == (3,)
+        # Should produce a deterministic ramp, not crash
+        assert len(np.unique(result)) == 3
+
+    def test_normalize_semantics_clipping(self):
+        huge = np.array([1e10, -1e10, 0.0])
+        result = SemanticEvaluator._normalize_semantics(huge)
+        # After clipping to [-1e6, 1e6] and standardising, clamp to [-5, 5]
+        assert result.max() <= 5.0
+        assert result.min() >= -5.0
