@@ -93,7 +93,8 @@ class Trainer:
 
         # TODO: Aqui medir el paso del tiempo usando los callbacks en TrainingLogger.
         for epoch in range(1, epochs + 1):
-            epoch_start = time.time()
+            self.logger.on_epoch_start()
+            epoch_start = self.logger._epoch_start
 
             # ── Forward ─────────────────────────────────────────────
             y_pred = self.model(initial_sem, parent_sem, route_sem)
