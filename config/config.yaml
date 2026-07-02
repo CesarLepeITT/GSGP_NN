@@ -1,0 +1,9 @@
+# Hyperparameters
+num_corridas: 30
+configuraciones:
+  - { path: "yatch.txt", K: 2, N: 200, lr: 0.005, epochs: 200 }
+  - { path: "eheating.txt", K: 2, N: 200, lr: 0.005, epochs: 200 }
+  - { path: "ecooling.txt", K: 2, N: 200, lr: 0.005, epochs: 200 }
+  - { path: "housing.txt", K: 2, N: 50, lr: 0.005, epochs: 200 }
+  - { path: "ConcreteData.txt", K: 2, N: 200, lr: 0.005, epochs: 200 }
+  - { path: "tower.txt", K: 2, N: 200, lr: 0.005, epochs: 200 }
