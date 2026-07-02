@@ -113,12 +113,15 @@ def run_single_experiment(
 
     # ── Evaluate on test set ────────────────────────────────────────
     # Re-generate semantics for test data using the SAME GP populations
-    test_sem = _prepare_test_semantics(
-        dataset=dataset,
-        train_sem_data=train_sem,
-        N=N,
-        K=K,
+    test_sem = prepare_semantic_data(
+        X=dataset.X_test,
+        num_nodes=N,
+        num_layers=K,
+        population_size=population_size,
         device=device,
+        initial_population=train_sem["initial_population"],
+        auxiliary_population=train_sem["auxiliary_population"],
+        evaluator=train_sem["evaluator"],
     )
     y_pred_test = trainer.predict(test_sem)
     test_metrics = compute_metrics(y_test_t, y_pred_test)
@@ -148,54 +151,6 @@ def run_single_experiment(
         "epochs_trained": history["epochs_trained"],
         "final_loss": history["final_loss"],
         "converged": history["converged"],
-    }
-
-
-def _prepare_test_semantics(
-    dataset: RegressionDataset,
-    train_sem_data: dict,
-    N: int,
-    K: int,
-    device: torch.device,
-) -> dict:
-    """Re-evaluate the fixed GP populations on test data.
-
-    Uses the same GP trees that were generated during training so that
-    the learned weights are applied to consistent feature representations.
-    """
-    evaluator = train_sem_data["evaluator"]
-    initial_pop = train_sem_data["initial_population"]
-    auxiliary_pop = train_sem_data["auxiliary_population"]
-
-    initial_matrix = evaluator.create_semantic_matrix(initial_pop, dataset.X_test)
-    auxiliary_matrix = evaluator.create_semantic_matrix(auxiliary_pop, dataset.X_test)
-
-    # Same indexing logic as prepare_semantic_data
-    parent_rows = [initial_matrix[n % initial_matrix.shape[0]] for n in range(N)]
-    parent_semantics = torch.stack(parent_rows)
-
-    combined = torch.cat([initial_matrix, auxiliary_matrix], dim=0)
-    init_rows = [combined[n % combined.shape[0]] for n in range(N)]
-    initial_semantics = torch.stack(init_rows)
-
-    route_semantics = []
-    aux_idx = 0
-    for _k in range(K):
-        rt1_rows, rt2_rows = [], []
-        for _n in range(N):
-            rt1_rows.append(auxiliary_matrix[aux_idx % auxiliary_matrix.shape[0]])
-            aux_idx += 1
-            rt2_rows.append(auxiliary_matrix[aux_idx % auxiliary_matrix.shape[0]])
-            aux_idx += 1
-        route_semantics.append({
-            "rt1": torch.stack(rt1_rows),
-            "rt2": torch.stack(rt2_rows),
-        })
-
-    return {
-        "initial_semantics": initial_semantics,
-        "parent_semantics": parent_semantics,
-        "route_semantics": route_semantics,
     }
 
 

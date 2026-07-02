@@ -15,6 +15,7 @@ import torch
 import yaml
 
 from src.evolution.generator import GPGenerator
+from src.evolution.nodes import GPNode
 from src.evolution.semantics import SemanticEvaluator
 
 
@@ -42,6 +43,9 @@ def prepare_semantic_data(
     num_layers: int,
     population_size: int,
     device: torch.device,
+    initial_population: list[GPNode] | None = None,
+    auxiliary_population: list[GPNode] | None = None,
+    evaluator: SemanticEvaluator | None = None,
 ) -> dict[str, Any]:
     """Generate GP populations, evaluate semantics, and pack into tensors.
 
@@ -49,12 +53,21 @@ def prepare_semantic_data(
     evaluation) and then moves the resulting tensors to the target device
     for GPU-accelerated training.
 
+    When ``initial_population`` and ``auxiliary_population`` are provided,
+    the function skips tree generation and re-evaluates the given populations
+    on *X* (useful for producing test-set semantics from the same GP trees
+    used during training).  ``population_size`` is ignored in this case.
+
     Args:
         X: Feature matrix of shape ``(M, n_features)``.
         num_nodes: Number of semantic nodes ``N``.
         num_layers: Number of semantic layers ``K``.
         population_size: Size of each GP population (typically ``2*N*K``).
         device: Target device for output tensors.
+        initial_population: Optional pre-generated initial population.
+        auxiliary_population: Optional pre-generated auxiliary population.
+        evaluator: Optional pre-created evaluator (ignored when
+            ``initial_population`` is ``None``).
 
     Returns:
         Dictionary with the following keys:
@@ -63,7 +76,8 @@ def prepare_semantic_data(
         - ``parent_semantics``: ``(N, M)`` tensor — fixed parent features.
         - ``route_semantics``: list of K dicts, each with ``rt1`` and ``rt2``
           tensors of shape ``(N, M)`` — random tree pairs for mutation.
-        - ``gp_generator``: The ``GPGenerator`` instance (for prediction).
+        - ``gp_generator``: The ``GPGenerator`` instance (``None`` when
+          populations were provided).
         - ``evaluator``: The ``SemanticEvaluator`` instance.
         - ``initial_population``: List of GP trees for the initial population.
         - ``auxiliary_population``: List of GP trees for the auxiliary population.
@@ -71,20 +85,25 @@ def prepare_semantic_data(
     num_features = X.shape[1]
     variable_names = [f"x{i + 1}" for i in range(num_features)]
 
-    # --- GP tree generation (CPU) ------------------------------------
-    generator = GPGenerator(
-        function_set=["+", "-", "*", "/"],
-        terminal_set=variable_names,
-        max_depth=10,
-    )
+    if initial_population is not None and auxiliary_population is not None:
+        generator = None
+        print("[GP] Using provided populations (skipping generation)...")
+        if evaluator is None:
+            evaluator = SemanticEvaluator(variable_names, device=device)
+    else:
+        # --- GP tree generation (CPU) ------------------------------------
+        generator = GPGenerator(
+            function_set=["+", "-", "*", "/"],
+            terminal_set=variable_names,
+            max_depth=10,
+        )
 
-    print(f"[GP] Generating populations of size {population_size}...")
-    initial_population = generator.generate_population(population_size)
-    auxiliary_population = generator.generate_population(population_size)
+        print(f"[GP] Generating populations of size {population_size}...")
+        initial_population = generator.generate_population(population_size)
+        auxiliary_population = generator.generate_population(population_size)
+        evaluator = SemanticEvaluator(variable_names, device=device)
 
     # --- Semantic evaluation (CPU → device) ---------------------------
-    evaluator = SemanticEvaluator(variable_names, device=device)
-
     print("[GP] Evaluating initial population semantics...")
     initial_matrix = evaluator.create_semantic_matrix(initial_population, X)
     print("[GP] Evaluating auxiliary population semantics...")
