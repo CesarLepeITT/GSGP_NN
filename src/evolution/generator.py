@@ -25,6 +25,9 @@ class GPGenerator:
         terminal_set: Variable names available as leaves.
         min_depth: Minimum tree depth for generation (inclusive).
         max_depth: Maximum tree depth for generation (inclusive).
+        function_prob: Probability of choosing a function node (vs terminal).
+        terminal_var_ratio: Probability of choosing a variable (vs constant)
+            when a terminal is selected.
     """
 
     def __init__(
@@ -33,11 +36,20 @@ class GPGenerator:
         terminal_set: Sequence[str],
         min_depth: int = 1,
         max_depth: int = 3,
+        function_prob: float = 0.5,
+        terminal_var_ratio: float = 0.7,
     ) -> None:
+        if not 0 <= function_prob <= 1:
+            raise ValueError("function_prob must be in [0, 1]")
+        if not 0 <= terminal_var_ratio <= 1:
+            raise ValueError("terminal_var_ratio must be in [0, 1]")
+
         self.function_set = [op for op in function_set if op in _OPERATORS]
         self.terminal_set = list(terminal_set)
         self.min_depth = min_depth
         self.max_depth = max_depth
+        self.function_prob = function_prob
+        self.terminal_var_ratio = terminal_var_ratio
 
     # ------------------------------------------------------------------
     # Node creation helpers
@@ -47,20 +59,19 @@ class GPGenerator:
     # TODO: Revisar si las constantes tienen que estar restringidas de [-1, 1] o de [MIN_CONST, MAX_CONST] y su distribución
     def _random_constant() -> float:
         """Return a random ephemeral constant in [-1, 1]."""
-        return round(random.uniform(-1.0, 1.0), 3)
+        #return round(random.uniform(-1.0, 1.0), 3)
+        return random.uniform(-1.0, 1.0)
 
-    # TODO: Revisar la proporción 70 % variable, 30 % constante
+
     def _create_random_node(self, force_terminal: bool = False) -> GPNode:
         """Create a single random node (terminal or function)."""
-        if force_terminal or random.random() < 0.5:
-            # Terminal: 70 % variable, 30 % constant
-            if random.random() < 0.7 and self.terminal_set:
+        if force_terminal or random.random() > self.function_prob:
+            if random.random() < self.terminal_var_ratio and self.terminal_set:
                 value = random.choice(self.terminal_set)
             else:
                 value = self._random_constant()
             return GPNode(value, is_terminal=True, arity=0)
 
-        # Function node
         op = random.choice(self.function_set)
         return GPNode(op, is_terminal=False, arity=_OPERATORS[op])
 
