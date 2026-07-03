@@ -1,7 +1,9 @@
-"""Random GP tree population generator.
+"""Random GP tree population generator (Ramped Half-and-Half).
 
-Uses the *Grow* method: at each depth level a function or terminal is
-chosen randomly, with terminals forced at the maximum depth.
+Implements Koza's Ramped Half-and-Half method: for each individual a
+random depth is chosen uniformly between *min_depth* and *max_depth*;
+the tree is then built with either the *Grow* or *Full* method (50 %
+chance each), promoting structural and depth diversity.
 """
 
 from __future__ import annotations
@@ -16,22 +18,25 @@ _OPERATORS: dict[str, int] = {"+": 2, "-": 2, "*": 2, "/": 2}
 
 
 class GPGenerator:
-    """Generates random GP expression trees using the Grow method.
+    """Generates random GP expression trees using Ramped Half-and-Half.
 
     Args:
         function_set: Operators to use (subset of ``+, -, *, /``).
         terminal_set: Variable names available as leaves.
-        max_depth: Maximum tree depth for generation.
+        min_depth: Minimum tree depth for generation (inclusive).
+        max_depth: Maximum tree depth for generation (inclusive).
     """
 
     def __init__(
         self,
         function_set: Sequence[str],
         terminal_set: Sequence[str],
+        min_depth: int = 1,
         max_depth: int = 3,
     ) -> None:
         self.function_set = [op for op in function_set if op in _OPERATORS]
         self.terminal_set = list(terminal_set)
+        self.min_depth = min_depth
         self.max_depth = max_depth
 
     # ------------------------------------------------------------------
@@ -63,7 +68,6 @@ class GPGenerator:
     # Tree generation
     # ------------------------------------------------------------------
 
-    # TODO: Revisar el metodo para generar el arbol (Grow) 
     def generate_tree_grow(self, max_depth: int) -> GPNode:
         """Generate a single tree using the Grow method.
 
@@ -86,12 +90,35 @@ class GPGenerator:
 
         return node
 
-    # TODO: Revisar la lógica de generacion de poblacion y profundidad
-    def generate_population(self, size: int) -> list[GPNode]:
-        """Generate a population of GP trees with varied depths.
+    def generate_tree_full(self, depth: int) -> GPNode:
+        """Generate a single full tree using the Full method.
 
-        Depths cycle through ``[1, 2, 2, 3, 3, 3]`` to promote
-        diversity, matching the legacy ``generar_poblacion_grow`` logic.
+        All branches extend to exactly *depth* — every internal node is a
+        function and only leaves are terminals.
+
+        Args:
+            depth: Remaining depth budget.
+
+        Returns:
+            Root ``GPNode`` of the generated tree.
+        """
+        if depth <= 0:
+            return self._create_random_node(force_terminal=True)
+
+        op = random.choice(self.function_set)
+        node = GPNode(op, is_terminal=False, arity=_OPERATORS[op])
+        for _ in range(node.arity):
+            child = self.generate_tree_full(depth - 1)
+            node.add_child(child)
+
+        return node
+
+    def generate_population(self, size: int) -> list[GPNode]:
+        """Generate a population using Ramped Half-and-Half.
+
+        For each individual a random depth is chosen uniformly in
+        ``[min_depth, max_depth]``, and the tree is built with either
+        the *Grow* or *Full* method (equal probability).
 
         Args:
             size: Number of trees to create.
@@ -99,11 +126,12 @@ class GPGenerator:
         Returns:
             List of ``GPNode`` root nodes.
         """
-        depth_schedule = [1, 2, 2, 3, 3, 3] # TODO: Esto deberia de ser un hiperparametro min_depth a max_depth
-        #  y ademas se deberia de repartir la poblacion en esas profundidades de manera uniforme con el metodo de Rampend Half and half
         population: list[GPNode] = []
-        for i in range(size):
-            depth = depth_schedule[i % len(depth_schedule)]
-            tree = self.generate_tree_grow(depth)
+        for _ in range(size):
+            depth = random.randint(self.min_depth, self.max_depth)
+            if random.random() < 0.5:
+                tree = self.generate_tree_grow(depth)
+            else:
+                tree = self.generate_tree_full(depth)
             population.append(tree)
         return population
