@@ -28,6 +28,8 @@ class GPGenerator:
         function_prob: Probability of choosing a function node (vs terminal).
         terminal_var_ratio: Probability of choosing a variable (vs constant)
             when a terminal is selected.
+        const_min: Lower bound for ephemeral random constants.
+        const_max: Upper bound for ephemeral random constants.
     """
 
     def __init__(
@@ -38,11 +40,15 @@ class GPGenerator:
         max_depth: int = 3,
         function_prob: float = 0.5,
         terminal_var_ratio: float = 0.7,
+        const_min: float = -1.0,
+        const_max: float = 1.0,
     ) -> None:
         if not 0 <= function_prob <= 1:
             raise ValueError("function_prob must be in [0, 1]")
         if not 0 <= terminal_var_ratio <= 1:
             raise ValueError("terminal_var_ratio must be in [0, 1]")
+        if const_min > const_max:
+            raise ValueError("const_min must be <= const_max")
 
         self.function_set = [op for op in function_set if op in _OPERATORS]
         self.terminal_set = list(terminal_set)
@@ -50,17 +56,16 @@ class GPGenerator:
         self.max_depth = max_depth
         self.function_prob = function_prob
         self.terminal_var_ratio = terminal_var_ratio
+        self.const_min = const_min
+        self.const_max = const_max
 
     # ------------------------------------------------------------------
     # Node creation helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    # TODO: Revisar si las constantes tienen que estar restringidas de [-1, 1] o de [MIN_CONST, MAX_CONST] y su distribución
-    def _random_constant() -> float:
-        """Return a random ephemeral constant in [-1, 1]."""
-        #return round(random.uniform(-1.0, 1.0), 3)
-        return random.uniform(-1.0, 1.0)
+    def _random_constant(self) -> float:
+        """Return a random ephemeral constant in [const_min, const_max]."""
+        return random.uniform(self.const_min, self.const_max)
 
 
     def _create_random_node(self, force_terminal: bool = False) -> GPNode:
