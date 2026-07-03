@@ -144,7 +144,7 @@ class GPGenerator:
         """
         population: list[GPNode] = []
         for _ in range(size):
-            depth = random.randint(self.min_depth, self.max_depth)
+            depth = abs(random.randint(self.min_depth, self.max_depth))
             if random.random() < 0.5:
                 tree = self.generate_tree_grow(depth)
             else:

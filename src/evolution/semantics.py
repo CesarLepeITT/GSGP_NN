@@ -29,12 +29,15 @@ class SemanticEvaluator:
     # Single tree evaluation
     # ------------------------------------------------------------------
 
-    def evaluate_individual(self, tree: GPNode, X: np.ndarray) -> torch.Tensor:
+    def evaluate_individual(
+        self, tree: GPNode, X: np.ndarray, koza_division: bool = True
+    ) -> torch.Tensor:
         """Evaluate *tree* on every row of *X*.
 
         Args:
             tree: Root node of a GP expression tree.
             X: Feature matrix of shape ``(M, n_features)``.
+            koza_division: Use Koza's protected division formula.
 
         Returns:
             Normalised semantic tensor of shape ``(M,)`` on ``self.device``.
@@ -49,7 +52,7 @@ class SemanticEvaluator:
                 if j < X.shape[1]
             }
             try:
-                semantics[i] = tree.evaluate(variables)
+                semantics[i] = tree.evaluate(variables, koza_division=koza_division)
             except Exception:
                 semantics[i] = 0.0
 
@@ -61,18 +64,19 @@ class SemanticEvaluator:
     # ------------------------------------------------------------------
 
     def create_semantic_matrix(
-        self, population: list[GPNode], X: np.ndarray
+        self, population: list[GPNode], X: np.ndarray, koza_division: bool = True
     ) -> torch.Tensor:
         """Evaluate an entire population on *X*.
 
         Args:
             population: List of GP tree root nodes.
             X: Feature matrix of shape ``(M, n_features)``.
+            koza_division: Use Koza's protected division formula.
 
         Returns:
             Tensor of shape ``(pop_size, M)`` on ``self.device``.
         """
-        rows = [self.evaluate_individual(tree, X) for tree in population]
+        rows = [self.evaluate_individual(tree, X, koza_division=koza_division) for tree in population]
         return torch.stack(rows, dim=0)  # (pop_size, M)
 
     # ------------------------------------------------------------------

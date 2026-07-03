@@ -53,14 +53,18 @@ class GPNode:
     # Evaluation
     # ------------------------------------------------------------------
 
-    def evaluate(self, variables: dict[str, float]) -> float:
+    def evaluate(self, variables: dict[str, float], koza_division: bool = True) -> float:
         """Recursively evaluate the subtree given variable assignments.
 
-        Protected division returns 1.0 when the divisor is near zero.
-        Results are clamped to [-1e6, 1e6] to prevent blow-up.
+        When *koza_division* is ``True`` (default) protected division uses
+        Koza's formula: ``a / sqrt(1 + b*b)`` when ``b == 0``.  Otherwise
+        it returns ``1.0`` on division-by-zero.
+
+        Results are clamped to ``[-1e6, 1e6]`` to prevent blow-up.
 
         Args:
             variables: Mapping of variable names to their numeric values.
+            koza_division: Use Koza's protected division formula.
 
         Returns:
             Scalar evaluation result.
@@ -73,7 +77,7 @@ class GPNode:
         try:
             child_values: list[float] = []
             for child in self.children:
-                val = child.evaluate(variables)
+                val = child.evaluate(variables, koza_division=koza_division)
                 if not math.isfinite(val):
                     val = 0.0
                 child_values.append(val)
@@ -86,17 +90,13 @@ class GPNode:
                 result = a - b
             elif self.value == "*":
                 result = a * b
-
-            # TODO: Implementar la división protegida de la siguiente manera
-            # if (tmp!=0) {
-            #        pushGenes[tid] = push(tmp2 / tmp,pushGenes,stackInd);
-            #        out = tmp2 / tmp;
-            # }else {
-            #        pushGenes[tid] = push(tmp2 / sqrtf(1+tmp*tmp),pushGenes,stackInd);
-            #        out = tmp2 / sqrtf(1+tmp*tmp);
-
             elif self.value == "/":
-                result = a / b if abs(b) >= 1e-10 else 1.0
+                if abs(b) >= 1e-10:
+                    result = a / b
+                elif koza_division:
+                    result = a / math.sqrt(1.0 + b * b)
+                else:
+                    result = 1.0
             else:
                 result = 0.0
 

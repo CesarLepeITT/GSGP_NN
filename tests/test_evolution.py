@@ -49,11 +49,19 @@ class TestGPNode:
         root.add_child(GPNode(3.0, is_terminal=True))
         assert root.evaluate({}) == 2.0
 
-    def test_protected_division_by_zero(self):
+    def test_protected_division_by_zero_koza(self):
         root = GPNode("/", is_terminal=False, arity=2)
         root.add_child(GPNode(6.0, is_terminal=True))
         root.add_child(GPNode(0.0, is_terminal=True))
-        assert root.evaluate({}) == 1.0  # protected
+        # Koza: a / sqrt(1 + b*b) → 6.0 / sqrt(1) = 6.0
+        assert root.evaluate({}) == 6.0
+
+    def test_protected_division_by_zero_fallback(self):
+        root = GPNode("/", is_terminal=False, arity=2)
+        root.add_child(GPNode(6.0, is_terminal=True))
+        root.add_child(GPNode(0.0, is_terminal=True))
+        # Legacy: returns 1.0 on division-by-zero
+        assert root.evaluate({}, koza_division=False) == 1.0
 
     def test_result_clamped(self):
         # Very large multiplication
