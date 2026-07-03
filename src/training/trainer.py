@@ -67,6 +67,7 @@ class Trainer:
         semantic_data: dict[str, Any],
         y_train: torch.Tensor,
         epochs: int = 200,
+        max_time: float | None = None,
     ) -> dict[str, Any]:
         """Run the full training loop.
 
@@ -77,6 +78,8 @@ class Trainer:
             y_train: Target tensor of shape ``(M,)`` on the same device as
                 the model.
             epochs: Maximum number of training epochs.
+            max_time: Maximum wall-clock time in seconds for training. The
+                loop stops after the first epoch that exceeds this limit.
 
         Returns:
             Dictionary with training history and timing information.
@@ -90,6 +93,7 @@ class Trainer:
         self.epoch_times.clear()
 
         training_start = time.time()
+        stop_reason = "completed"
 
         for epoch in range(1, epochs + 1):
             self.logger.on_epoch_start()
@@ -128,11 +132,19 @@ class Trainer:
             # Early stopping
             if self.early_stopping is not None and self.early_stopping(loss_val):
                 print(f"\n[EarlyStopping] Stopped at epoch {epoch}")
+                stop_reason = "early_stopping"
+                break
+
+            # Max time limit
+            if max_time is not None and (time.time() - training_start) > max_time:
+                print(f"\n[MaxTime] Reached time limit at epoch {epoch}")
+                stop_reason = "max_time"
                 break
 
         self.total_training_time = time.time() - training_start
 
-        print(f"\n[Training] Completed in {self.total_training_time:.2f}s")
+        print(f"\n[Training] Completed in {self.total_training_time:.2f}s "
+              f"(reason: {stop_reason})")
         if self.epoch_times:
             avg = self.total_training_time / len(self.epoch_times)
             print(f"[Training] Average time per epoch: {avg:.4f}s")
@@ -144,6 +156,7 @@ class Trainer:
             "epochs_trained": len(self.loss_history),
             "final_loss": self.loss_history[-1] if self.loss_history else float("inf"),
             "converged": len(self.loss_history) < epochs,
+            "stop_reason": stop_reason,
         }
 
     @torch.no_grad()

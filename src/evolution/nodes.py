@@ -123,6 +123,35 @@ class GPNode:
     # String representation
     # ------------------------------------------------------------------
 
+    def to_sympy(self) -> str:
+        """Convert subtree to a sympy-compatible expression string.
+
+        Terminal nodes are rendered as their value (``x1``, ``0.5``, …).
+        Internal nodes use standard infix notation with parentheses.
+        Protected division is expressed as plain division for symbolic
+        extraction.
+        """
+        if self.is_terminal:
+            if isinstance(self.value, float):
+                return f"({self.value})"
+            return str(self.value)
+
+        left, right = self.children[0].to_sympy(), self.children[1].to_sympy()
+
+        if self.value == "+":
+            return f"({left} + {right})"
+        if self.value == "-":
+            return f"({left} - {right})"
+        if self.value == "*":
+            return f"({left} * {right})"
+        if self.value == "/":
+            return f"({left} / {right})"
+        return "0"
+
+    def count_nodes(self) -> int:
+        """Return the total number of nodes in this subtree."""
+        return 1 + sum(c.count_nodes() for c in self.children)
+
     def __repr__(self) -> str:  # pragma: no cover
         if self.is_terminal:
             return str(self.value)

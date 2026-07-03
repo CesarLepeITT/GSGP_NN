@@ -46,6 +46,7 @@ def prepare_semantic_data(
     initial_population: list[GPNode] | None = None,
     auxiliary_population: list[GPNode] | None = None,
     evaluator: SemanticEvaluator | None = None,
+    koza_division: bool = True,
 ) -> dict[str, Any]:
     """Generate GP populations, evaluate semantics, and pack into tensors.
 
@@ -68,6 +69,7 @@ def prepare_semantic_data(
         auxiliary_population: Optional pre-generated auxiliary population.
         evaluator: Optional pre-created evaluator (ignored when
             ``initial_population`` is ``None``).
+        koza_division: Use Koza's protected division formula.
 
     Returns:
         Dictionary with the following keys:
@@ -105,9 +107,13 @@ def prepare_semantic_data(
 
     # --- Semantic evaluation (CPU → device) ---------------------------
     print("[GP] Evaluating initial population semantics...")
-    initial_matrix = evaluator.create_semantic_matrix(initial_population, X)
+    initial_matrix = evaluator.create_semantic_matrix(
+        initial_population, X, koza_division=koza_division
+    )
     print("[GP] Evaluating auxiliary population semantics...")
-    auxiliary_matrix = evaluator.create_semantic_matrix(auxiliary_population, X)
+    auxiliary_matrix = evaluator.create_semantic_matrix(
+        auxiliary_population, X, koza_division=koza_division
+    )
 
     M = X.shape[0]
 
